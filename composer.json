@@ -15,9 +15,6 @@
   "autoload": {
     "psr-4": {
       "michaelbmuller\\steam-properties\\": "src/"
-    },
-    "files": [
-      "src/helpers.php"
-    ]
+    }
   }
 }
