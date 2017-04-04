@@ -1,0 +1,23 @@
+{
+  "name": "michaelbmuller/steam-properties",
+  "description": "IAPWS Steam Properties Calculations",
+  "keywords": ["steam", "steam properties", "iapws"],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Michael B Muller",
+      "email": "muller.michaelb@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=5.5.9",
+  },
+  "autoload": {
+    "psr-4": {
+      "michaelbmuller\\steam-properties\\": "src/"
+    },
+    "files": [
+      "src/helpers.php"
+    ]
+  },
+}
