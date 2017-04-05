@@ -1,5 +1,6 @@
 {
   "name": "michaelbmuller/steam-properties",
+  "type": "library",
   "description": "IAPWS Steam Properties Calculations",
   "keywords": ["steam", "steam properties", "iapws"],
   "license": "MIT",
@@ -12,9 +13,17 @@
   "require": {
     "php": ">=5.5.9"
   },
+  "require-dev": {
+    "phpunit/phpunit": "~6.0"
+  },
   "autoload": {
     "psr-4": {
-      "michaelbmuller\\steam-properties\\": "src/"
+      "Steam\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
     }
   }
 }

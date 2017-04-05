@@ -1,26 +1,16 @@
 <?php
-/**
- * Steam Calculators 
- * 
- * @package    Steam
- * @version    beta
- * @author     Michael B Muller
- * <mbm@analyticalenergy.com>
- * 
+/*
+ * This file is part of the Steam package.
+ *
+ * (c) Michael B Muller <muller.michaelb@gmail.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
  */
 
-/**
- * Include needed Object classes
- */
-require_once 'IAPWS.php';
+namespace Steam;
 
-/**
- * Standard Steam Object
- * Determines and Contains all properties of an individual point of steam
- * 
- * @package    Steam
- */
-class Steam_Object{
+class Properties{
 
     /**
      * Temperature K
@@ -108,7 +98,7 @@ class Steam_Object{
      * @param array() $properties 
      */
     public function __construct($properties = NULL) {        
-        $this->iapws = new Steam_IAPWS();
+        $this->iapws = new IAPWS();
         
         //Set Massflow if provided
         if (isset($properties['massFlow'])) $this->massFlow = $properties['massFlow'];

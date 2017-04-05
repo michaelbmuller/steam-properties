@@ -12,7 +12,7 @@
 /**
  * include needed classes
  */
-require_once('Steam/Object.php');
+require_once('Steam/Properties.php');
 require_once('Steam/ObjectDisplay.php');
 
 /**
