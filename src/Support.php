@@ -147,6 +147,9 @@ class Support extends Core
         $region3propB = Core::region3Density($densityB = $boundary23Properties->density, $temperature);
         $testPressureB = $region3propB->pressure;
 
+        $pressureNew = null;
+        $region3propNew = null;
+
         //Base Goal Seek
         for ($x = 1; $x < 5; $x++) {
             $densityNew = ($densityA + $densityB) / 2;
@@ -183,6 +186,7 @@ class Support extends Core
     static function saturatedPressure($temperature)
     {
         if ($temperature <= self::TEMPERATURE_CRIT) return Core::region4($temperature);
+        return null;
     }
 
     /**
@@ -193,6 +197,7 @@ class Support extends Core
     static function saturatedTemperature($pressure)
     {
         if ($pressure <= self::PRESSURE_CRIT) return Core::backwardRegion4($pressure);
+        return null;
     }
 
     /**
@@ -374,6 +379,7 @@ class Support extends Core
         if ($pressure > self::PRESSURE_Tp) {
             $boundaryTemperature = Core::boundaryByPressureRegion3to2($pressure);
             $boundaryProps = Core::region2($pressure, $boundaryTemperature);
+            $region = '2';
             $specificEntropyLimit = $boundaryProps->specificEntropy;
         }
         if ($specificEntropy < $specificEntropyLimit) {
@@ -415,6 +421,7 @@ class Support extends Core
             }
         }
         $testProps = Core::region2($pressure, $temperature);
+        $testProps->region = $region;
         return $testProps;
     }
 
@@ -586,8 +593,8 @@ class Support extends Core
         $min = self::waterPropertiesPT($pressure, self::TEMPERATURE_MIN);
         $max = self::waterPropertiesPT($pressure, self::TEMPERATURE_MAX);
         $result = array(
-            'min' => $min[$type],
-            'max' => $max[$type],
+            'min' => $min->$type,
+            'max' => $max->$type,
         );
         return $result;
     }
