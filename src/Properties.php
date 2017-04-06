@@ -42,7 +42,13 @@ class Properties{
      * @var double 
      */
     public $volumeFlow = 0;
-    
+
+    /**
+     * Internal Energy kJ/kg
+     * @var double
+     */
+    public $internalEnergy = null;
+
     /**
      * Specific Enthalpy kJ/kg
      * @var double

@@ -7,6 +7,19 @@ use Steam\IF97;
 
 class IF97Test extends TestCase
 {
+
+    public function test_BoundaryByTemperatureRegion3to2()
+    {
+        $pressure = IF97::boundaryByTemperatureRegion3to2(0.623150e3);
+        $this->assertEquals(0.165291643e2, $pressure, 'Pressure', 1e-7);
+    }
+
+    public function test_BoundaryByPressureRegion3to2()
+    {
+        $temperature = IF97::boundaryByPressureRegion3to2(0.165291643e2);
+        $this->assertEquals(0.623150e3, $temperature, 'Temperature', 1e-6);
+    }
+
     public function test_Region1()
     {
         $properties = IF97::region1(3, 300);
@@ -122,6 +135,44 @@ class IF97Test extends TestCase
         $this->assertEquals(0.854011484e3, $temperature, 'backwardPSregion2c', 1e-6);
         $temperature = IF97::backwardPSregion2c(80, 5.75);
         $this->assertEquals(0.949017998e3, $temperature, 'backwardPSregion2c', 1e-6);
+    }
+
+    public function testRegion3Density()
+    {
+        $properties = IF97::region3Density(500, 650);
+        $this->assertEquals(.255837018e2, $properties->pressure, 'pressure', 1e-7);
+        $this->assertEquals(.186343019e4, $properties->specificEnthalpy, 'specificEnthalpy', 1e-3);
+        $this->assertEquals(.405427273e1, $properties->specificEntropy, 'specificEntropy', 1e-8);
+
+        $properties = IF97::region3Density(200, 650);
+        $this->assertEquals(.222930643e2, $properties->pressure, 'pressure', 1e-7);
+        $this->assertEquals(.237512401e4, $properties->specificEnthalpy, 'specificEnthalpy', 1e-3);
+        $this->assertEquals(.485438792e1, $properties->specificEntropy, 'specificEntropy', 1e-8);
+
+        $properties = IF97::region3Density(500, 750);
+        $this->assertEquals(.783095639e2, $properties->pressure, 'pressure', 1e-7);
+        $this->assertEquals(.225868845e4, $properties->specificEnthalpy, 'specificEnthalpy', 1e-3);
+        $this->assertEquals(.446971906e1, $properties->specificEntropy, 'specificEntropy', 1e-8);
+    }
+
+    public function testRegion4()
+    {
+        $pressure = IF97::region4(300);
+        $this->assertEquals(0.353658941e-2, $pressure, 'region4', 1e-11);
+        $pressure = IF97::region4(500);
+        $this->assertEquals(0.263889776e1, $pressure, 'region4', 1e-8);
+        $pressure = IF97::region4(600);
+        $this->assertEquals(0.123443146e2, $pressure, 'region4', 1e-7);
+    }
+
+    public function testBackwardRegion4()
+    {
+        $temperature = IF97::backwardRegion4(.1);
+        $this->assertEquals(0.372755919e3, $temperature, '', 1e-6);
+        $temperature = IF97::backwardRegion4(1);
+        $this->assertEquals(0.453035632e3, $temperature, '', 1e-6);
+        $temperature = IF97::backwardRegion4(10);
+        $this->assertEquals(0.584149488e3, $temperature, '', 1e-6);
     }
 
 }

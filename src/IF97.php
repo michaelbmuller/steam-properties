@@ -793,17 +793,19 @@ class IF97
         }
 
         $constant_R = .461526;
-        $region3['temperature'] = $temperature;
-        $region3['pressure'] = $reduced_density * $helmholtz_s * $density * $temperature * $constant_R / 1000;
-        $region3['density'] = $density;
-        $region3['specificVolume'] = 1 / $density;
-        $region3['internalEnergy'] = $inverse_reduced_temp * $helmholtz_t * $temperature * $constant_R;
-        $region3['specificEnthalpy'] = ($inverse_reduced_temp * $helmholtz_t + $reduced_density * $helmholtz_s) * $temperature * $constant_R;
-        $region3['specificEntropy'] = ($inverse_reduced_temp * $helmholtz_t - $helmholtz) * $constant_R;
-        $region3['quality'] = NULL;
-        $region3['phase'] = "";
 
-        return $region3;
+        $properties = new Properties();
+        $properties->temperature = $temperature;
+        $properties->pressure = $reduced_density * $helmholtz_s * $density * $temperature * $constant_R / 1000;
+        $properties->density = $density;
+        $properties->specificVolume = 1 / $density;
+        $properties->internalEnergy = $inverse_reduced_temp * $helmholtz_t * $temperature * $constant_R;
+        $properties->specificEnthalpy = ($inverse_reduced_temp * $helmholtz_t + $reduced_density * $helmholtz_s) * $temperature * $constant_R;
+        $properties->specificEntropy = ($inverse_reduced_temp * $helmholtz_t - $helmholtz) * $constant_R;
+        $properties->quality = NULL;
+        $properties->phase = "";
+
+        return $properties;
     }
 
     /**
