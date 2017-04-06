@@ -103,8 +103,7 @@ class Properties{
      * 
      * @param array() $properties 
      */
-    public function __construct($properties = NULL) {        
-        $this->iapws = new IAPWS();
+    public function __construct($properties = NULL) {
         
         //Set Massflow if provided
         if (isset($properties['massFlow'])) $this->massFlow = $properties['massFlow'];
@@ -118,7 +117,7 @@ class Properties{
         if (isset($properties['pressure']) and isset($pressureAnd)) {
             switch ($pressureAnd) {
                 case 'temperature':
-                    $properties = $this->iapws->waterPropertiesPT($properties['pressure'],$properties['temperature']);                    
+                    $properties = IF97::waterPropertiesPT($properties['pressure'],$properties['temperature']);
                     break;
                 case 'quality':
                     $properties = $this->propertyQuality($properties['pressure'], $properties['quality']);

@@ -1,227 +1,606 @@
 <?php
-/**
- * Steam Calculators
- * 
- * @package    Steam
- * @version    beta
- * @author     Michael B Muller
- * <mbm@analyticalenergy.com>
+/*
+ * This file is part of the Steam package.
+ *
+ * (c) Michael B Muller <muller.michaelb@gmail.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
  */
 
+namespace Steam;
+
 /**
- * Contains Common Functions and Data for the Steam Calculators
- * @package    Steam
+ * Extends IAPWS Core Equations
  */
-class Steam_Support{    
-      
+class Support extends Core
+{
+
     /**
-     * Returns calculator descriptions
-     * @param string $group
-     * @param string $calculator
-     * @return array
+     * Maximum Pressure of Water MPa
      */
-    public static function descriptions($group = false, $calculator = false){
-        $descriptions = array(
-            'Properties' => array(
-                'satProps' => array('Saturated Properties', 'Calculates saturated liquid and gas properties for a given pressure or temperature using the IAPWS Industrial Formulation 1997.', 'propSaturated'),
-                'steamProps' => array('Individual Steam Properties', 'Calculates steam and liquid water properties given two properties using the IAPWS Industrial Formulation 1997.', 'propSteam'),
-                ),
-            'Equipment' => array(
-                'boiler' => array('Boiler', 'Determines the amount of fuel energy required to produce steam with specified properties at a given flow rate using general boiler operational characteristics.', 'equipBoiler'),
-                'heatloss' => array('Heat Loss', 'Calculates the energy (heat) loss and outlet steam properties given inlet steam conditions and a % heat loss.', 'equipHeatloss'),
-                'flashtank' => array('Flash Tank', 'Determines the mass flows and properties of any resulting outlet gas and/or liquid for given inlet conditions.', 'equipFlashtank'),
-                'prv' => array('PRV w/ Desuperheating', 'Calculates the properties of steam after a pressure drop with optional desuperheating.', 'equipPrv'),
-                'header' => array('Header', 'Calculates the combined steam properties of multiple steam inlets.', 'equipHeader'),
-                'deaerator' => array('Deaerator', 'Determines the required water and steam flows for a required feedwater mass flow.', 'equipDeaerator'),
-                'steamTurbine' => array('Steam Turbine', 'Calculates the energy generated or steam outlet conditions for a steam turbine.', 'equipTurbine'),
-                ),
-            'Modeler' => array(
-                'modeler' => array('Steam System Modeler', 'Creates a basic steam system model with up to 3 different pressure headers.', 'overview'),
-            )
+    const PRESSURE_MIN = 0.01;
+
+    /**
+     * Maximum Temperature of Water K
+     */
+    const TEMPERATURE_MIN = 273.15;
+
+    /**
+     * Pressure of Water where ALL regions meet MPa
+     */
+    const PRESSURE_Tp = 16.5291643;
+
+    /**
+     * Temperature of Water where ALL regions meet K
+     */
+    const TEMPERATURE_Tp = 623.15;
+
+    /**
+     * Critical Pressure of Water MPa
+     */
+    const PRESSURE_CRIT = 22.064;
+
+    /**
+     * Critical Temperature of Water K
+     */
+    const TEMPERATURE_CRIT = 647.096;
+
+    /**
+     * Maximum Pressure of Water MPa
+     */
+    const PRESSURE_MAX = 100;
+
+    /**
+     * Maximum Temperature of Water MPa
+     */
+    const TEMPERATURE_MAX = 1073.15;
+
+    /**
+     * Maximum Temperature of Water for Region 3 MPa
+     */
+    const TEMPERATURE_REGION3_MAX = 863.15;
+
+    /**
+     * Returns Steam Properties based on $pressure and $temperature
+     *
+     * @param double $pressure MPa
+     * @param double $temperature K
+     * @return Properties SteamProperties
+     */
+    static function waterPropertiesPT($pressure, $temperature)
+    {
+        $properties = new Properties();
+        $region = self::regionSelect($pressure, $temperature);
+        switch ($region) {
+            case 1:
+                $properties = Core::region1($pressure, $temperature);
+                $properties->phase = "Liquid";
+                break;
+            case 2:
+                $properties = Core::region2($pressure, $temperature);
+                $properties->phase = "Gas";
+                break;
+            case 3:
+                $properties = self::region3($pressure, $temperature);
+                $properties->phase = "Liquid";
+                break;
+        }
+        $properties->region = $region;
+        $properties->temperature = $temperature;
+        $properties->quality = NULL;
+        return $properties;
+    }
+
+    /**
+     * Returns the IAPWS region based on $pressure and $temperature
+     *
+     * @param float $pressure MPa
+     * @param float $temperature K
+     * @return int Region
+     */
+    static function regionSelect($pressure, $temperature)
+    {
+        $region = 0;
+        //Determine Boundary
+        if ($temperature >= self::TEMPERATURE_Tp) {
+            $boundaryPressure = Core::boundaryByTemperatureRegion3to2($temperature);
+        } else {
+            $boundaryPressure = self::saturatedPressure($temperature);
+        }
+
+        if ($temperature >= self::TEMPERATURE_MIN and $temperature <= self::TEMPERATURE_Tp) {
+            if ($pressure <= self::PRESSURE_MAX and $pressure >= $boundaryPressure) {
+                $region = 1; //Liquid
+            }
+            if ($pressure > 0 and $pressure <= $boundaryPressure) {
+                $region = 2; //Gas
+            }
+        }
+        if ($temperature >= self::TEMPERATURE_Tp and $temperature <= self::TEMPERATURE_REGION3_MAX) {
+            if ($pressure > 0 and $pressure <= $boundaryPressure) {
+                $region = 2; //Gas
+            }
+            if ($pressure <= self::PRESSURE_MAX and $pressure > $boundaryPressure) {
+                $region = 3; //Liquid
+            }
+        }
+        if ($temperature > self::TEMPERATURE_REGION3_MAX and $temperature <= self::TEMPERATURE_MAX) $region = 2; //Gas
+        return $region;
+    }
+
+    /**
+     * Determines the Density in Region 3 based on $pressure and $temperature
+     *
+     * @param float $pressure MPa
+     * @param float $temperature K
+     * @return Properties kg/m3
+     */
+    static function region3($pressure, $temperature)
+    {
+
+        $boundary13Properties = Core::region1($pressure, self::TEMPERATURE_Tp);
+        $region3propA = Core::region3Density($densityA = $boundary13Properties['density'], $temperature);
+        $testPressureA = $region3propA['pressure'];
+
+        $boundary23Properties = Core::region2($pressure, Core::boundaryByPressureRegion3to2($pressure));
+        $region3propB = Core::region3Density($densityB = $boundary23Properties['density'], $temperature);
+        $testPressureB = $region3propB['pressure'];
+
+        //Base Goal Seek
+        for ($x = 1; $x < 5; $x++) {
+            $densityNew = ($densityA + $densityB) / 2;
+            $region3propNew = Core::region3Density($densityNew, $temperature);
+            $pressureNew = $region3propNew['pressure'];
+            if ($pressure > $pressureNew) {
+                $densityB = $densityNew;
+                $testPressureB = $pressureNew;
+            } else {
+                $densityA = $densityNew;
+                $testPressureA = $pressureNew;
+            }
+        }
+
+        //Uses Linear Interpolation
+        $counter = 0;
+        while (abs($pressureNew - $pressure) > 1e-10 and $counter++ < 50 and $testPressureA <> $testPressureB) {
+            $densityNew = $pressure * ($densityA - $densityB) / ($testPressureA - $testPressureB) + $densityA - $testPressureA * ($densityA - $densityB) / ($testPressureA - $testPressureB);
+            $region3propNew = Core::region3Density($densityNew, $temperature);
+            $pressureNew = $region3propNew->pressure;
+            $densityB = $densityA;
+            $densityA = $densityNew;
+            $testPressureB = $testPressureA;
+            $testPressureA = $pressureNew;
+        }
+        return $region3propNew;
+    }
+
+    /**
+     * Returns the saturated pressure based on temperature
+     * @param double $temperature K
+     * @return double pressure MPa
+     */
+    static function saturatedPressure($temperature)
+    {
+        if ($temperature <= self::TEMPERATURE_CRIT) return Core::region4($temperature);
+    }
+
+    /**
+     * Returns the saturated temperature based on pressure
+     * @param double $pressure MPa
+     * @return double temperature K
+     */
+    static function saturatedTemperature($pressure)
+    {
+        if ($pressure <= self::PRESSURE_CRIT) return Core::backwardRegion4($pressure);
+    }
+
+    /**
+     * Provides saturated liquid and gas properties for a given pressure
+     * @param double $pressure MPa
+     * @return array()
+     */
+    static function saturatedPropertiesByPressure($pressure)
+    {
+        $temperature = self::saturatedTemperature($pressure);
+        $properties['gas'] = Core::region2($pressure, $temperature);
+        $properties['gas']['region'] = 2;
+        $properties['gas']['quality'] = 1;
+        if ($temperature >= self::TEMPERATURE_MIN and $temperature <= self::TEMPERATURE_Tp) {
+            $properties['liquid'] = Core::region1($pressure, $temperature);
+            $properties['liquid']['quality'] = 0;
+            $properties['liquid']['region'] = 1;
+        }
+        if ($temperature > self::TEMPERATURE_Tp and $temperature <= self::TEMPERATURE_CRIT) {
+            $properties['liquid'] = self::region3($pressure, $temperature);
+            $properties['liquid']['quality'] = 0;
+            $properties['liquid']['region'] = 3;
+        }
+        $properties['temperature'] = $temperature;
+        $properties['pressure'] = $pressure;
+        $properties['gas']['temperature'] = $temperature;
+        $properties['gas']['pressure'] = $pressure;
+        $properties['liquid']['temperature'] = $temperature;
+        $properties['liquid']['pressure'] = $pressure;
+        $properties['region'] = $properties['liquid']['region'] . '&' . $properties['gas']['region'];
+        return $properties;
+    }
+
+    /**
+     * Provides saturated liquid and gas properties for a given temperature
+     * @param double $temperature K
+     * @return array()
+     */
+    static function saturatedPropertiesByTemperature($temperature)
+    {
+        return self::saturatedPropertiesByPressure(self::saturatedPressure($temperature));
+    }
+
+    /**
+     * Returns Steam Properties based on $pressure and $specificEnthalpy
+     * @param double $pressure MPa
+     * @param double $specificEnthalpy kJ/kg
+     * @return array() SteamProperties
+     */
+    static function waterPropertiesPH($pressure, $specificEnthalpy)
+    {
+        if ($pressure < self::PRESSURE_CRIT) {
+            $pressureSatProps = self::saturatedPropertiesByPressure($pressure);
+            $specificEnthalpyLimit = $pressureSatProps['liquid']['specificEnthalpy'];
+        }
+        if ($pressure > self::PRESSURE_Tp) {
+            $boundaryTemperature = Core::boundaryByPressureRegion3to2($pressure);
+            $boundaryProps =Core::region2($pressure, $boundaryTemperature);
+            $specificEnthalpyLimit = $boundaryProps['specificEnthalpy'];
+        }
+        if ($specificEnthalpy < $specificEnthalpyLimit) {
+            if ($pressure > self::PRESSURE_Tp) $region13boundary = self::waterPropertiesPT($pressure, self::TEMPERATURE_Tp);
+            if ($pressure <= self::PRESSURE_Tp or $specificEnthalpy < $region13boundary['specificEnthalpy']) {
+                $temperature = self::backwardPHregion1Exact($pressure, $specificEnthalpy);
+                $testProps = Core::region1($pressure, $temperature);
+                $testProps['region'] = '1';
+            } else {
+                $temperature = Core::backwardPHregion3($pressure, $specificEnthalpy);
+                $testProps = Core::region3($pressure, $temperature);
+                $testProps['region'] = 3;
+            }
+            return $testProps;
+        }
+
+        if ($pressure < self::PRESSURE_CRIT and $specificEnthalpy >= $pressureSatProps['liquid']['specificEnthalpy'] and $specificEnthalpy <= $pressureSatProps['gas']['specificEnthalpy']) {
+            $quality = ($specificEnthalpy - $pressureSatProps['liquid']['specificEnthalpy'])
+                / ($pressureSatProps['gas']['specificEnthalpy'] - $pressureSatProps['liquid']['specificEnthalpy']);
+            $testProps = array(
+                'temperature' => $pressureSatProps['gas']['temperature'],
+                'pressure' => $pressure,
+                'specificEnthalpy' => $specificEnthalpy,
+                'specificEntropy' => ($pressureSatProps['gas']['specificEntropy'] - $pressureSatProps['liquid']['specificEntropy']) * $quality + $pressureSatProps['liquid']['specificEntropy'],
+                'quality' => $quality,
+                'specificVolume' => ($pressureSatProps['gas']['specificVolume'] - $pressureSatProps['liquid']['specificVolume']) * $quality + $pressureSatProps['liquid']['specificVolume'],
+                'region' => 4,
             );
-        $result = $descriptions;
-        if ($group and !$calculator) $result = $descriptions[$group];
-        if ($group and $calculator) $result = $descriptions[$group][$calculator];
+            return $testProps;
+        }
+
+        if ($pressure <= 4) {
+            $temperature = self::backwardPHregion2aExact($pressure, $specificEnthalpy);
+            $region = '2a';
+        } else {
+            $constants = array(
+                1 => 0.90584278514723E+3,
+                2 => -0.67955786399241,
+                3 => 0.12809002730136E-3,
+            );
+            $pressureLine = $constants[1]
+                + $constants[2] * $specificEnthalpy
+                + $constants[3] * pow($specificEnthalpy, 2);
+            if ($pressureLine > $pressure) {
+                $temperature = self::backwardPHregion2bExact($pressure, $specificEnthalpy);
+                $region = '2b';
+            } else {
+                $temperature = self::backwardPHregion2cExact($pressure, $specificEnthalpy);
+                $region = '2c';
+            }
+        }
+        $testProps = self::region2($pressure, $temperature);
+        $testProps['region'] = $region;
+        return $testProps;
+
+    }
+
+    /**
+     * Returns a more accurate Temperature than backwardPHregion1
+     * @param float $pressure MPa
+     * @param float $specificEnthalpy kJ/kg
+     * @return float $temperature K
+     */
+    static function backwardPHregion1Exact($pressure, $specificEnthalpy)
+    {
+        return self::backwardExact('region1', 'specificEnthalpy', 'backwardPHregion1', $pressure, $specificEnthalpy);
+    }
+
+    /**
+     * Returns a more accurate Temperature than backwardPHregion2a
+     * @param float $pressure MPa
+     * @param float $specificEnthalpy kJ/kg
+     * @return float $temperature K
+     */
+    static function backwardPHregion2aExact($pressure, $specificEnthalpy)
+    {
+        return self::backwardExact('region2', 'specificEnthalpy', 'backwardPHregion2a', $pressure, $specificEnthalpy);
+    }
+
+    /**
+     * Returns a more accurate Temperature than backwardPHregion2b
+     * @param float $pressure MPa
+     * @param float $specificEnthalpy kJ/kg
+     * @return float $temperature K
+     */
+    static function backwardPHregion2bExact($pressure, $specificEnthalpy)
+    {
+        return self::backwardExact('region2', 'specificEnthalpy', 'backwardPHregion2b', $pressure, $specificEnthalpy);
+    }
+
+    /**
+     * Returns a more accurate Temperature than backwardPHregion2c
+     * @param float $pressure MPa
+     * @param float $specificEnthalpy kJ/kg
+     * @return float $temperature K
+     */
+    static function backwardPHregion2cExact($pressure, $specificEnthalpy)
+    {
+        return self::backwardExact('region2', 'specificEnthalpy', 'backwardPHregion2c', $pressure, $specificEnthalpy);
+    }
+
+    /**
+     * Uses linear interpolation to goal seek Region3 using pressure and enthalpy
+     * @param float $pressure MPa
+     * @param float $specificEnthalpy kJ/kg
+     * @return float $temperature K
+     */
+    static function backwardPHregion3($pressure, $specificEnthalpy)
+    {
+        return self::backwardRegion3Exact($pressure, $specificEnthalpy, 'specificEnthalpy');
+    }
+
+    /**
+     * Returns Steam Properties based on $pressure and $specificEntropy
+     * @param double $pressure MPa
+     * @param double $specificEntropy kJ/kg/K
+     * @return array() SteamProperties
+     */
+    static function waterPropertiesPS($pressure, $specificEntropy)
+    {
+        if ($pressure < self::PRESSURE_CRIT) {
+            $pressureSatProps = self::saturatedPropertiesByPressure($pressure);
+            $specificEntropyLimit = $pressureSatProps['liquid']['specificEntropy'];
+        }
+
+        if ($pressure > self::PRESSURE_Tp) {
+            $boundaryTemperature = Core::boundaryByPressureRegion3to2($pressure);
+            $boundaryProps = Core::region2($pressure, $boundaryTemperature);
+            $specificEntropyLimit = $boundaryProps['specificEntropy'];
+        }
+        if ($specificEntropy < $specificEntropyLimit) {
+            if ($pressure > self::PRESSURE_Tp) $region13boundary = Core::waterPropertiesPT($pressure, self::TEMPERATURE_Tp);
+            if ($pressure <= self::PRESSURE_Tp or $specificEntropy < $region13boundary['specificEntropy']) {
+                $temperature = self::backwardPSregion1Exact($pressure, $specificEntropy);
+                $testProps = Core::region1($pressure, $temperature);
+                $testProps['region'] = '1';
+            } else {
+                $temperature = self::backwardPSregion3($pressure, $specificEntropy);
+                $testProps = Core::region3($pressure, $temperature);
+                $testProps['region'] = 3;
+            }
+            return $testProps;
+        }
+
+        if ($pressure < self::PRESSURE_CRIT and $specificEntropy >= $pressureSatProps['liquid']['specificEntropy'] and $specificEntropy <= $pressureSatProps['gas']['specificEntropy']) {
+            $quality = ($specificEntropy - $pressureSatProps['liquid']['specificEntropy'])
+                / ($pressureSatProps['gas']['specificEntropy'] - $pressureSatProps['liquid']['specificEntropy']);
+
+            $testProps = array(
+                'temperature' => $pressureSatProps['gas']['temperature'],
+                'pressure' => $pressure,
+                'specificEntropy' => $specificEntropy,
+                'specificEnthalpy' => ($pressureSatProps['gas']['specificEnthalpy'] - $pressureSatProps['liquid']['specificEnthalpy']) * $quality + $pressureSatProps['liquid']['specificEnthalpy'],
+                'quality' => $quality,
+                'specificVolume' => ($pressureSatProps['gas']['specificVolume'] - $pressureSatProps['liquid']['specificVolume']) * $quality + $pressureSatProps['liquid']['specificVolume'],
+                'region' => 4,
+            );
+            return $testProps;
+        }
+
+        if ($pressure <= 4) {
+            $temperature = self::backwardPSregion2aExact($pressure, $specificEntropy);
+            $region = '2a';
+        } else {
+            if ($specificEntropy >= 5.85) {
+                $temperature = self::backwardPSregion2bExact($pressure, $specificEntropy);
+                $region = '2b';
+            } else {
+                $temperature = self::backwardPSregion2cExact($pressure, $specificEntropy);
+                $region = '2c';
+            }
+        }
+        $testProps = Core::region2($pressure, $temperature);
+        $testProps['region'] = $region;
+        return $testProps;
+    }
+
+    /**
+     * Returns a more accurate Temperature than backwardPSregion1
+     * @param float $pressure MPa
+     * @param float $specificEntropy kJ/kg/K
+     * @return float $temperature K
+     */
+    static function backwardPSregion1Exact($pressure, $specificEntropy)
+    {
+        return self::backwardExact('region1', 'specificEntropy', 'backwardPSregion1', $pressure, $specificEntropy);
+    }
+
+    /**
+     * Returns a more accurate Temperature than backwardPSregion2a
+     * @param float $pressure MPa
+     * @param float $specificEntropy kJ/kg/K
+     * @return float $temperature K
+     */
+    static function backwardPSregion2aExact($pressure, $specificEntropy)
+    {
+        return self::backwardExact('region2', 'specificEntropy', 'backwardPSregion2a', $pressure, $specificEntropy);
+    }
+
+    /**
+     * Returns a more accurate Temperature than backwardPSregion2b
+     * @param float $pressure MPa
+     * @param float $specificEntropy kJ/kg/K
+     * @return float $temperature K
+     */
+    static function backwardPSregion2bExact($pressure, $specificEntropy)
+    {
+        return self::backwardExact('region2', 'specificEntropy', 'backwardPSregion2b', $pressure, $specificEntropy);
+    }
+
+    /**
+     * Returns a more accurate Temperature than backwardPSregion2c
+     * @param float $pressure MPa
+     * @param float $specificEntropy kJ/kg/K
+     * @return float $temperature K
+     */
+    static function backwardPSregion2cExact($pressure, $specificEntropy)
+    {
+        return self::backwardExact('region2', 'specificEntropy', 'backwardPSregion2c', $pressure, $specificEntropy);
+    }
+
+    /**
+     * Uses linear interpolation to goal seek Region3 using pressure and entropy
+     * @param float $pressure MPa
+     * @param float $specificEntropy kJ/kg
+     * @return float $temperature K
+     */
+    static function backwardPSregion3($pressure, $specificEntropy)
+    {
+        return self::backwardRegion3Exact($pressure, $specificEntropy, 'specificEntropy');
+    }
+
+    /**
+     * Uses linear extrapolation for estimate equation to determine much more accurate $temperature
+     * @param string $region ['region1','region2']
+     * @param string $backwardUnitType ['specificEthalpy' or 'specificEntropy']
+     * @param string $backwardRegionFunction ['region1','region2a', etc]
+     * @param float $pressure MPa
+     * @param float $var2 [specificEthalpy or specificEntropy]
+     * @return float Temperature K
+     */
+    static function backwardExact($region, $backwardUnitType, $backwardRegionFunction, $pressure, $var2)
+    {
+        $pointA = self::generatePoint($region, $backwardUnitType, $pressure, self::$backwardRegionFunction($pressure, $var2));
+        $pointB = self::generatePoint($region, $backwardUnitType, $pressure, self::$backwardRegionFunction($pressure, $pointA[0]));
+        $temperature = self::linearTestPoint($var2, $pointA, $pointB);
+
+        $pointA = self::generatePoint($region, $backwardUnitType, $pressure, $temperature);
+        $temperature = self::linearTestPoint($var2, $pointA, $pointB);
+        return $temperature;
+    }
+
+    /**
+     * Specifically for Region3. Uses linear interpolation for estimate equation to determine much more accurate $temperature
+     * @param float $pressure MPa
+     * @param double $unit [specificEthalpy or specificEntropy]
+     * @param string $unitType ['specificEthalpy' or 'specificEntropy']
+     * @return double
+     */
+    static function backwardRegion3Exact($pressure, $unit, $unitType)
+    {
+        $temperature = self::TEMPERATURE_Tp;
+        $pointA = self::generatePoint('region1', $unitType, $pressure, $temperature);
+        $pointB = self::generatePoint('region2', $unitType, $pressure, Core::boundaryByPressureRegion3to2($pressure));
+        $temperatureB = self::linearTestPoint($unit, $pointA, $pointB);
+        $counter = 0;
+        while (abs($temperature - $temperatureB) > 1e-6 and $counter++ < 15) {
+            $pointA = $pointB;
+            $pointB = self::generatePoint('region3', $unitType, $pressure, $temperatureB);
+            $temperature = $temperatureB;
+            $temperatureB = self::linearTestPoint($unit, $pointA, $pointB);
+        }
+        return $temperatureB;
+    }
+
+    /**
+     * Generates a Data Point for a given function
+     * @param string $function
+     * @param string $key
+     * @param float $var1
+     * @param float $var2
+     * @return array()
+     */
+    static function generatePoint($function, $key, $var1, $var2)
+    {
+        $result = self::$function($var1, $var2);
+        $point = array($result[$key], $var2);
+        return $point;
+    }
+
+    /**
+     * Uses linear extrapolation to determine location of $X relative to both points
+     * @param float $X
+     * @param array() $point1
+     * @param array() $point2
+     * @return float Y
+     */
+    static function linearTestPoint($X, $point1, $point2)
+    {
+        $slope = 0;
+        if ($point1[0] - $point2[0] <> 0) $slope = ($point1[1] - $point2[1]) / ($point1[0] - $point2[0]);
+        $yIntercept = $point1[1] - $slope * $point1[0];
+        return $X * $slope + $yIntercept;
+    }
+
+    /**
+     * Returns the minimum and maximum acceptable values for Temperature based on a given pressure
+     * @param double $pressure
+     * @return array ('min', 'max') K
+     */
+    static function rangeTemperatureByPressure($pressure)
+    {
+        return array('min' => self::TEMPERATURE_MIN, 'max' => self::TEMPERATURE_MAX);
+    }
+
+    /**
+     * Returns the minimum and maximum acceptable values for Entropy based on a given pressure
+     * @param double $pressure MPa
+     * @return array ('min', 'max') kJ/kg/K
+     */
+    static function rangeSpecificEntropyByPressure($pressure)
+    {
+        return self::rangeByPressure($pressure, 'specificEntropy');
+    }
+
+    /**
+     * Returns the minimum and maximum acceptable values for Enthalpy based on a given pressure
+     * @param double $pressure MPa
+     * @return array ('min', 'max') kJ/kg
+     */
+    static function rangeSpecificEnthalpyByPressure($pressure)
+    {
+        return self::rangeByPressure($pressure, 'specificEnthalpy');
+    }
+
+    /**
+     * Returns the minimum and maximum acceptable values for "$type" based on a given pressure
+     * @param double $pressure MPa
+     * @return array ('min', 'max')
+     */
+    static function rangeByPressure($pressure, $type)
+    {
+        $min = self::waterPropertiesPT($pressure, self::TEMPERATURE_MIN);
+        $max = self::waterPropertiesPT($pressure, self::TEMPERATURE_MAX);
+        $result = array(
+            'min' => $min[$type],
+            'max' => $max[$type],
+        );
         return $result;
     }
-    
-    /**
-     * Filters data based on header count to elimiate unused header data
-     * @param array $properties
-     * @return array $properties filtered
-     */
-    static public function headerAdjustment($properties){
-        $filteredData = $properties;
-        $highPressure = $properties['highPressure'];
-        $headerCount = $properties['headerCount'];
-        if ($headerCount<3){
-            $filteredData['mediumPressure'] = $highPressure;
-            $filteredData['mpSteamUsage'] = 0;
-            $filteredData['hpCondFlash'] = 'No';
-            $filteredData['mpHeatLossPercent'] = 0;
-            $filteredData['desuperHeatMpLp'] = 'No';
-            $filteredData['turbineHpMpOn'] = 0;
-            $filteredData['turbineMpLpOn'] = 0;            
-        }
-        
-        if ($headerCount<2){
-            $filteredData['lowPressure'] = $highPressure;
-            $filteredData['lpSteamUsage'] = 0;
-            $filteredData['mpCondFlash'] = 'No';
-            $filteredData['lpHeatLossPercent'] = 0;
-            $filteredData['desuperHeatHpMp'] = 'No';
-            $filteredData['turbineHpLpOn'] = 0;       
-        }
-        return $filteredData;
-    }
-        
-    /**
-     * Adds the approporiate navigation breadcrumbs based on the $url
-     * @param string $url
-     * @return string
-     */
-    public static function BreadCrumb($action, $base = false){
-        $translator = Zend_Registry::get('Zend_Translate');
-        
-      
-        if (!$base) $base = "<a href='./'>".$translator->_("Steam Calculators")."</a> &raquo; ";
-        switch($action){
-            case 'index':
-                $crumb = $translator->_('Steam Calculators');
-                break;
-            case 'about':
-                $crumb = $base.$translator->_("About");
-                break;
-            case 'glossary':
-                $crumb = $base.$translator->_("Glossary");
-                break;
-            case 'preferences':
-                $crumb = $base.$translator->_("Preferences");
-                break;
-            case 'resources':
-                $crumb = $base.$translator->_("Steam Resources");
-                break;
-            case 'tutorials':
-                $crumb = $base.$translator->_("Tutorials");
-                break;
-            case 'propSaturated':
-                $crumb = $base.$translator->_("Saturated Properties Calculator");
-                break;
-            case 'propSteam':
-                $crumb = $base.$translator->_("Individual Steam Properties Calculator");
-                break;
-            case 'equipBoiler':
-                $crumb = $base.$translator->_("Boiler Calculator");
-                break;
-            case 'equipHeatloss':
-                $crumb = $base.$translator->_("Heat Loss Calculator");
-                break;
-            case 'equipFlashtank':
-                $crumb = $base.$translator->_("Flash Tank Calculator");
-                break;
-            case 'equipPrv':
-                $crumb = $base.$translator->_("PRV Calculator");
-                break;
-            case 'equipHeader':
-                $crumb = $base.$translator->_("Header Calculator");
-                break;
-            case 'equipDeaerator':
-                $crumb = $base.$translator->_("Deaerator Calculator");
-                break;
-            case 'equipTurbine':
-                $crumb = $base.$translator->_("Steam Turbine Calculator");
-                break;
-            case 'overview':
-            case 'baseModel':
-            case 'baseDiagram':
-            case 'baseEnergy':
-            case 'steamBalance':
-            case 'adjustedModel':
-            case 'adjustedDiagram':
-            case 'adjustedEnergy':
-            case 'modelComparison':   
-            case 'modelReload':    
-            case 'export':              
-                $crumb = $base.$translator->_("Steam System Modeler");
-                break;
-            default:                                    
-                $crumb = $base.$translator->_("not found");
-                break;
-        }
-        return $crumb;
-    }
-    
-    /**
-     * Returns formatted warning, if any
-     * @param type $equipmentObject
-     * @return string warnings or blank
-     */
-    public static function displayWarnings($equipmentObject){
-        $warnings = "";
-        $translator = Zend_Registry::get('Zend_Translate');
-        if ($equipmentObject->checkWarnings()>0){
-            $warnings .= "<h1 style='color: red;'>".$translator->_('WARNING').":</h1><div style='background-color: #FDD; width: 400px; padding: 5px;'>";
-            foreach($equipmentObject->warnings as $warning){
-                $warnings .= "<span style='color: red; font-weight: bold; width: 400px;'>- ".$translator->_($warning)."</span><BR>";
-            }
-            $warnings .= "</div><br>";
-        }
-        return $warnings;
-    }
-    
-    /**
-     * Return value wrapped in color [red is negative, green if positive or 0]
-     * @param float $value
-     * @param string $displayValue
-     * @return string
-     */
-    public static function colorValue($value, $displayValue){
-        if (is_null($value)) return null;
-        if ($value>0){
-            return "<span style='color: red'>".$displayValue."</span>";
-        }
-        return "<span style='color: green'>".$displayValue."</span>";
-    }
-    
-    /**
-     * Return <table> cells highlight difference in values
-     * @param float $valueA
-     * @param float $valueB
-     * @param string $displayType
-     * @return string
-     */
-    public static function highlightDifference($valueA, $valueB, $displayType = 'Cost'){
-        $mS = Steam_MeasurementSystem::getInstance();
-        
-        $difference = $valueB - $valueA;
-        $diffPercent = NULL;
-        if ($valueA<>0) $diffPercent = $difference / $valueA * 100;
-        
-        
-        if ($displayType == 'Cost'){
-            $displayValue = number_format($difference);
-        }else{
-            $displayFunction = 'display'.$displayType;
-            $displayValue = $mS->$displayFunction($difference);
-        }
-        
-        $result = '
-            <td class="c">'.self::colorValue($difference,$displayValue).'</td>
-            <td class="c">'.self::colorValue($diffPercent,number_format($diffPercent,1).'%').'</td>';
-        
-        return $result;  
-    }
-    
-     /**
-     * List of Steam Turbine Codes
-     * @return array
-     */    
-    public static function steamTurbineCodes(){
-        return array(
-            'HpLp',
-            'HpMp',
-            'MpLp',
-            'Cond',
-            );
-    }
 }
+
+?>
