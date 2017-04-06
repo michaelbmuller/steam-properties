@@ -30,7 +30,21 @@ class Properties{
      * @var double
      */
     public $quality = NULL;
-    
+
+    /**
+     * Saturated Liquid Properties
+     * If qualify between 0 and 1
+     * @var Properties
+     */
+    public $saturatedLiquid = null;
+
+    /**
+     * Saturated Gas Properties
+     * If qualify between 0 and 1
+     * @var Properties
+     */
+    public $saturatedGas = null;
+
     /**
      * Massflow kg/hr
      * @var double 
@@ -135,21 +149,19 @@ class Properties{
 
     /**
      * Determine Steam Properties based on Pressure and Quality
-     * @param double $pressure MPa
      * @param double $quality (0-1)
      * @return array() Steam Properties
      */
-    private function propertyQuality($pressure, $quality){
-        $tmp = $this->iapws->saturatedPropertiesByPressure($pressure);
-        $properties['temperature'] = $tmp['gas']['temperature'] * 1;
-        $properties['pressure'] = $tmp['gas']['pressure'] * 1;
-        $properties['specificEnthalpy'] = $tmp['gas']['specificEnthalpy'] * $quality + $tmp['liquid']['specificEnthalpy'] * (1-$quality);
-        $properties['specificEntropy'] = $tmp['gas']['specificEntropy'] * $quality + $tmp['liquid']['specificEntropy'] * (1-$quality);
-        $properties['specificVolume'] = $tmp['gas']['specificVolume'] * $quality + $tmp['liquid']['specificVolume'] * (1-$quality);
-        $properties['density'] = 1/$properties['specificVolume'];
-        $properties['quality'] = $quality;
-        $properties['region'] = $tmp['region'];
-        return $properties;
+    public function propertyQuality($quality){
+        $this->quality = $quality;
+        $this->temperature = $this->saturatedGas->temperature * 1;
+        $this->pressure = $this->saturatedGas->pressure * 1;
+        $this->specificEnthalpy = $this->saturatedGas->specificEnthalpy * $quality + $this->saturatedLiquid->specificEnthalpy * (1-$quality);
+        $this->specificEntropy = $this->saturatedGas->specificEntropy * $quality + $this->saturatedLiquid->specificEntropy * (1-$quality);
+        $this->specificVolume = $this->saturatedGas->specificVolume * $quality + $this->saturatedLiquid->specificVolume * (1-$quality);
+        $this->density = 1/$this->specificVolume;
+        $this->quality = $quality;
+        //$this->region = $tmp['region'];
     }
 
     /**

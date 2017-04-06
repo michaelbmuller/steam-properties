@@ -5,7 +5,7 @@ namespace Tests;
 use PHPUnit\Framework\TestCase;
 use Steam\Core;
 
-class IF97Test extends TestCase
+class CoreTest extends TestCase
 {
 
     public function test_BoundaryByTemperatureRegion3to2()

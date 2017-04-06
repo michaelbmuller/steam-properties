@@ -301,6 +301,8 @@ class Core
         //$properties->internalEnergy =($inverse_reduced_temp*($gibbs_t[0]+$gibbs_t[1])-$reduced_pressure*($gibbs_pi[0]+$gibbs_pi[1]))*$temperature*$constant_R;
         $properties->specificEnthalpy = $inverse_reduced_temp * ($gibbs_t[0] + $gibbs_t[1]) * $temperature * $constant_R;
         $properties->specificEntropy = ($inverse_reduced_temp * ($gibbs_t[0] + $gibbs_t[1]) - ($gibbs[0] + $gibbs[1])) * $constant_R;
+        $properties->region = 2;
+        $properties->quality = 1;
         return $properties;
     }
 

@@ -140,18 +140,18 @@ class Support extends Core
     {
 
         $boundary13Properties = Core::region1($pressure, self::TEMPERATURE_Tp);
-        $region3propA = Core::region3Density($densityA = $boundary13Properties['density'], $temperature);
-        $testPressureA = $region3propA['pressure'];
+        $region3propA = Core::region3Density($densityA = $boundary13Properties->density, $temperature);
+        $testPressureA = $region3propA->pressure;
 
         $boundary23Properties = Core::region2($pressure, Core::boundaryByPressureRegion3to2($pressure));
-        $region3propB = Core::region3Density($densityB = $boundary23Properties['density'], $temperature);
-        $testPressureB = $region3propB['pressure'];
+        $region3propB = Core::region3Density($densityB = $boundary23Properties->density, $temperature);
+        $testPressureB = $region3propB->pressure;
 
         //Base Goal Seek
         for ($x = 1; $x < 5; $x++) {
             $densityNew = ($densityA + $densityB) / 2;
             $region3propNew = Core::region3Density($densityNew, $temperature);
-            $pressureNew = $region3propNew['pressure'];
+            $pressureNew = $region3propNew->pressure;
             if ($pressure > $pressureNew) {
                 $densityB = $densityNew;
                 $testPressureB = $pressureNew;
@@ -204,25 +204,25 @@ class Support extends Core
     {
         $temperature = self::saturatedTemperature($pressure);
         $properties['gas'] = Core::region2($pressure, $temperature);
-        $properties['gas']['region'] = 2;
-        $properties['gas']['quality'] = 1;
+        $properties['gas']->region = 2;
+        $properties['gas']->quality = 1;
         if ($temperature >= self::TEMPERATURE_MIN and $temperature <= self::TEMPERATURE_Tp) {
             $properties['liquid'] = Core::region1($pressure, $temperature);
-            $properties['liquid']['quality'] = 0;
-            $properties['liquid']['region'] = 1;
+            $properties['liquid']->quality = 0;
+            $properties['liquid']->region = 1;
         }
         if ($temperature > self::TEMPERATURE_Tp and $temperature <= self::TEMPERATURE_CRIT) {
             $properties['liquid'] = self::region3($pressure, $temperature);
-            $properties['liquid']['quality'] = 0;
-            $properties['liquid']['region'] = 3;
+            $properties['liquid']->quality = 0;
+            $properties['liquid']->region = 3;
         }
         $properties['temperature'] = $temperature;
         $properties['pressure'] = $pressure;
-        $properties['gas']['temperature'] = $temperature;
-        $properties['gas']['pressure'] = $pressure;
-        $properties['liquid']['temperature'] = $temperature;
-        $properties['liquid']['pressure'] = $pressure;
-        $properties['region'] = $properties['liquid']['region'] . '&' . $properties['gas']['region'];
+        $properties['gas']->temperature = $temperature;
+        $properties['gas']->pressure = $pressure;
+        $properties['liquid']->temperature = $temperature;
+        $properties['liquid']->pressure = $pressure;
+        $properties['region'] = $properties['liquid']->region . '&' . $properties['gas']->region;
         return $properties;
     }
 
@@ -240,45 +240,40 @@ class Support extends Core
      * Returns Steam Properties based on $pressure and $specificEnthalpy
      * @param double $pressure MPa
      * @param double $specificEnthalpy kJ/kg
-     * @return array() SteamProperties
+     * @return Properties
      */
     static function waterPropertiesPH($pressure, $specificEnthalpy)
     {
         if ($pressure < self::PRESSURE_CRIT) {
             $pressureSatProps = self::saturatedPropertiesByPressure($pressure);
-            $specificEnthalpyLimit = $pressureSatProps['liquid']['specificEnthalpy'];
+            $specificEnthalpyLimit = $pressureSatProps['liquid']->specificEnthalpy;
         }
         if ($pressure > self::PRESSURE_Tp) {
             $boundaryTemperature = Core::boundaryByPressureRegion3to2($pressure);
             $boundaryProps =Core::region2($pressure, $boundaryTemperature);
-            $specificEnthalpyLimit = $boundaryProps['specificEnthalpy'];
+            $specificEnthalpyLimit = $boundaryProps->specificEnthalpy;
         }
         if ($specificEnthalpy < $specificEnthalpyLimit) {
             if ($pressure > self::PRESSURE_Tp) $region13boundary = self::waterPropertiesPT($pressure, self::TEMPERATURE_Tp);
-            if ($pressure <= self::PRESSURE_Tp or $specificEnthalpy < $region13boundary['specificEnthalpy']) {
+            if ($pressure <= self::PRESSURE_Tp or $specificEnthalpy < $region13boundary->specificEnthalpy) {
                 $temperature = self::backwardPHregion1Exact($pressure, $specificEnthalpy);
                 $testProps = Core::region1($pressure, $temperature);
-                $testProps['region'] = '1';
+                $testProps->region = '1';
             } else {
-                $temperature = Core::backwardPHregion3($pressure, $specificEnthalpy);
-                $testProps = Core::region3($pressure, $temperature);
-                $testProps['region'] = 3;
+                $temperature = self::backwardPHregion3($pressure, $specificEnthalpy);
+                $testProps = self::region3($pressure, $temperature);
+                $testProps->region = 3;
             }
             return $testProps;
         }
 
-        if ($pressure < self::PRESSURE_CRIT and $specificEnthalpy >= $pressureSatProps['liquid']['specificEnthalpy'] and $specificEnthalpy <= $pressureSatProps['gas']['specificEnthalpy']) {
-            $quality = ($specificEnthalpy - $pressureSatProps['liquid']['specificEnthalpy'])
-                / ($pressureSatProps['gas']['specificEnthalpy'] - $pressureSatProps['liquid']['specificEnthalpy']);
-            $testProps = array(
-                'temperature' => $pressureSatProps['gas']['temperature'],
-                'pressure' => $pressure,
-                'specificEnthalpy' => $specificEnthalpy,
-                'specificEntropy' => ($pressureSatProps['gas']['specificEntropy'] - $pressureSatProps['liquid']['specificEntropy']) * $quality + $pressureSatProps['liquid']['specificEntropy'],
-                'quality' => $quality,
-                'specificVolume' => ($pressureSatProps['gas']['specificVolume'] - $pressureSatProps['liquid']['specificVolume']) * $quality + $pressureSatProps['liquid']['specificVolume'],
-                'region' => 4,
-            );
+        if ($pressure < self::PRESSURE_CRIT and $specificEnthalpy >= $pressureSatProps['liquid']->specificEnthalpy and $specificEnthalpy <= $pressureSatProps['gas']->specificEnthalpy) {
+            $quality = ($specificEnthalpy - $pressureSatProps['liquid']->specificEnthalpy)
+                / ($pressureSatProps['gas']->specificEnthalpy - $pressureSatProps['liquid']->specificEnthalpy);
+            $testProps = new Properties();
+            $testProps->saturatedGas =  $pressureSatProps['gas'];
+            $testProps->saturatedLiquid =$pressureSatProps['liquid'];
+            $testProps->propertyQuality($quality);
             return $testProps;
         }
 
@@ -303,7 +298,7 @@ class Support extends Core
             }
         }
         $testProps = self::region2($pressure, $temperature);
-        $testProps['region'] = $region;
+        $testProps->region = $region;
         return $testProps;
 
     }
@@ -367,47 +362,43 @@ class Support extends Core
      * Returns Steam Properties based on $pressure and $specificEntropy
      * @param double $pressure MPa
      * @param double $specificEntropy kJ/kg/K
-     * @return array() SteamProperties
+     * @return Properties
      */
     static function waterPropertiesPS($pressure, $specificEntropy)
     {
         if ($pressure < self::PRESSURE_CRIT) {
             $pressureSatProps = self::saturatedPropertiesByPressure($pressure);
-            $specificEntropyLimit = $pressureSatProps['liquid']['specificEntropy'];
+            $specificEntropyLimit = $pressureSatProps['liquid']->specificEntropy;
         }
 
         if ($pressure > self::PRESSURE_Tp) {
             $boundaryTemperature = Core::boundaryByPressureRegion3to2($pressure);
             $boundaryProps = Core::region2($pressure, $boundaryTemperature);
-            $specificEntropyLimit = $boundaryProps['specificEntropy'];
+            $specificEntropyLimit = $boundaryProps->specificEntropy;
         }
         if ($specificEntropy < $specificEntropyLimit) {
-            if ($pressure > self::PRESSURE_Tp) $region13boundary = Core::waterPropertiesPT($pressure, self::TEMPERATURE_Tp);
-            if ($pressure <= self::PRESSURE_Tp or $specificEntropy < $region13boundary['specificEntropy']) {
+            if ($pressure > self::PRESSURE_Tp) $region13boundary = self::waterPropertiesPT($pressure, self::TEMPERATURE_Tp);
+            if ($pressure <= self::PRESSURE_Tp or $specificEntropy < $region13boundary->specificEntropy) {
                 $temperature = self::backwardPSregion1Exact($pressure, $specificEntropy);
                 $testProps = Core::region1($pressure, $temperature);
-                $testProps['region'] = '1';
+                $testProps->region = '1';
             } else {
                 $temperature = self::backwardPSregion3($pressure, $specificEntropy);
-                $testProps = Core::region3($pressure, $temperature);
-                $testProps['region'] = 3;
+                $testProps = self::region3($pressure, $temperature);
+                $testProps->region = 3;
             }
             return $testProps;
         }
 
-        if ($pressure < self::PRESSURE_CRIT and $specificEntropy >= $pressureSatProps['liquid']['specificEntropy'] and $specificEntropy <= $pressureSatProps['gas']['specificEntropy']) {
-            $quality = ($specificEntropy - $pressureSatProps['liquid']['specificEntropy'])
-                / ($pressureSatProps['gas']['specificEntropy'] - $pressureSatProps['liquid']['specificEntropy']);
+        if ($pressure < self::PRESSURE_CRIT and $specificEntropy >= $pressureSatProps['liquid']->specificEntropy and $specificEntropy <= $pressureSatProps['gas']->specificEntropy) {
+            $quality = ($specificEntropy - $pressureSatProps['liquid']->specificEntropy)
+                / ($pressureSatProps['gas']->specificEntropy - $pressureSatProps['liquid']->specificEntropy);
 
-            $testProps = array(
-                'temperature' => $pressureSatProps['gas']['temperature'],
-                'pressure' => $pressure,
-                'specificEntropy' => $specificEntropy,
-                'specificEnthalpy' => ($pressureSatProps['gas']['specificEnthalpy'] - $pressureSatProps['liquid']['specificEnthalpy']) * $quality + $pressureSatProps['liquid']['specificEnthalpy'],
-                'quality' => $quality,
-                'specificVolume' => ($pressureSatProps['gas']['specificVolume'] - $pressureSatProps['liquid']['specificVolume']) * $quality + $pressureSatProps['liquid']['specificVolume'],
-                'region' => 4,
-            );
+            $testProps = new Properties();
+            $testProps->saturatedGas =  $pressureSatProps['gas'];
+            $testProps->saturatedLiquid =$pressureSatProps['liquid'];
+            $testProps->propertyQuality($quality);
+            $testProps->region = 4;
             return $testProps;
         }
 
@@ -424,7 +415,6 @@ class Support extends Core
             }
         }
         $testProps = Core::region2($pressure, $temperature);
-        $testProps['region'] = $region;
         return $testProps;
     }
 
@@ -537,7 +527,7 @@ class Support extends Core
     static function generatePoint($function, $key, $var1, $var2)
     {
         $result = self::$function($var1, $var2);
-        $point = array($result[$key], $var2);
+        $point = array($result->$key, $var2);
         return $point;
     }
 
