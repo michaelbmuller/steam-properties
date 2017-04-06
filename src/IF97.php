@@ -14,9 +14,6 @@ namespace Steam;
  * Class implements equations from IAPWS IF97
  * International Association for the Properties of Water and Steam's
  * Thermodynamic Properties of Water and Steam Industrial Formulation, www.iapws.org
- *
- * @package    Steam
- * @subpackage    Steam_IAPWS
  */
 class IF97
 {
@@ -25,7 +22,7 @@ class IF97
      * Temperature Range 623.15 to 863.15 K
      *
      * @param float $temperature K
-     * @return float $pressure MPa
+     * @return float Pressure MPa
      */
     static function boundaryByTemperatureRegion3to2($temperature)
     {
@@ -44,7 +41,7 @@ class IF97
      * Temperature Range 16.5292 to 100 MPa
      *
      * @param float $pressure MPa
-     * @return float $temperature K
+     * @return float Temperature K
      */
     static function boundaryByPressureRegion3to2($pressure)
     {
@@ -158,13 +155,13 @@ class IF97
         );
 
         $nu = $specificEnthalpy / 2500;
-        $temp = 0;
+        $temperature = 0;
         for ($i = 0; $i < 20; $i++) {
-            $temp += $constant['n'][$i]
+            $temperature += $constant['n'][$i]
                 * pow($pressure, $constant['I'][$i])
                 * pow(($nu + 1), $constant['J'][$i]);
         }
-        return $temp;
+        return $temperature;
     }
 
     /**
@@ -198,13 +195,13 @@ class IF97
             20 => array(4, 32, -0.30732199903668E-30),
         );
 
-        $temp = 0;
+        $temperature = 0;
         for ($i = 1; $i <= 20; $i++) {
-            $temp += $constants[$i][2]
+            $temperature += $constants[$i][2]
                 * pow($pressure, $constants[$i][0])
                 * pow(($specificEntropy + 2), $constants[$i][1]);
         }
-        return $temp;
+        return $temperature;
     }
 
     /**
@@ -293,16 +290,18 @@ class IF97
         }
 
         $constant_R = .461526;
-        $region1['temperature'] = $temperature;
-        $region1['pressure'] = $pressure;
-        $region1['phase'] = 'Gas';
-        $region1['quality'] = null;
-        $region1['specificVolume'] = $reduced_pressure * ($gibbs_pi[0] + $gibbs_pi[1]) * $temperature * $constant_R / $pressure / 1000;
-        $region1['density'] = 1 / $region1['specificVolume'];
-        //$region1['internalEnergy']=($inverse_reduced_temp*($gibbs_t[0]+$gibbs_t[1])-$reduced_pressure*($gibbs_pi[0]+$gibbs_pi[1]))*$temperature*$constant_R;
-        $region1['specificEnthalpy'] = $inverse_reduced_temp * ($gibbs_t[0] + $gibbs_t[1]) * $temperature * $constant_R;
-        $region1['specificEntropy'] = ($inverse_reduced_temp * ($gibbs_t[0] + $gibbs_t[1]) - ($gibbs[0] + $gibbs[1])) * $constant_R;
-        return $region1;
+
+        $properties = new Properties();
+        $properties->temperature = $temperature;
+        $properties->pressure = $pressure;
+        $properties->phase = 'Gas';
+        $properties->quality = null;
+        $properties->specificVolume = $reduced_pressure * ($gibbs_pi[0] + $gibbs_pi[1]) * $temperature * $constant_R / $pressure / 1000;
+        $properties->density = 1 / $properties->specificVolume;
+        //$properties->internalEnergy =($inverse_reduced_temp*($gibbs_t[0]+$gibbs_t[1])-$reduced_pressure*($gibbs_pi[0]+$gibbs_pi[1]))*$temperature*$constant_R;
+        $properties->specificEnthalpy = $inverse_reduced_temp * ($gibbs_t[0] + $gibbs_t[1]) * $temperature * $constant_R;
+        $properties->specificEntropy = ($inverse_reduced_temp * ($gibbs_t[0] + $gibbs_t[1]) - ($gibbs[0] + $gibbs[1])) * $constant_R;
+        return $properties;
     }
 
     /**
