@@ -278,7 +278,7 @@ class Support extends Core
             $testProps = new Properties();
             $testProps->saturatedGas =  $pressureSatProps['gas'];
             $testProps->saturatedLiquid =$pressureSatProps['liquid'];
-            $testProps->propertyQuality($quality);
+            $testProps->setQuality($quality);
             return $testProps;
         }
 
@@ -403,7 +403,7 @@ class Support extends Core
             $testProps = new Properties();
             $testProps->saturatedGas =  $pressureSatProps['gas'];
             $testProps->saturatedLiquid =$pressureSatProps['liquid'];
-            $testProps->propertyQuality($quality);
+            $testProps->setQuality($quality);
             $testProps->region = 4;
             return $testProps;
         }

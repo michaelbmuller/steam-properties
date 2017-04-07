@@ -10,20 +10,21 @@
 
 namespace Steam;
 
-class Properties{
+class Properties
+{
 
     /**
      * Temperature K
      * @var double
      */
     public $temperature = NULL;
-    
+
     /**
      * Pressure MPa
      * @var double
      */
     public $pressure = NULL;
-    
+
     /**
      * Quality of Steam
      * If Saturated, 0 to 1; Otherwise null
@@ -47,13 +48,13 @@ class Properties{
 
     /**
      * Massflow kg/hr
-     * @var double 
+     * @var double
      */
     public $massFlow = 0;
-    
+
     /**
      * Volume flow m3/hr
-     * @var double 
+     * @var double
      */
     public $volumeFlow = 0;
 
@@ -68,131 +69,140 @@ class Properties{
      * @var double
      */
     public $specificEnthalpy = NULL;
-    
+
     /**
      * Specific Entropy kJ/kg/R
-     * @var double 
+     * @var double
      */
     public $specificEntropy = NULL;
-    
+
     /**
      * Specific Entropy m3/kg
-     * @var double 
+     * @var double
      */
     public $specificVolume = NULL;
-    
+
     /**
      * Energy Flow kJ/hr
      * @var double
      */
     public $energyFlow = NULL;
-    
+
     /**
      * Phase Liquid/Saturated/Gas
-     * @var double 
+     * @var double
      */
     public $phase = NULL;
-    
+
     /**
      * Density kg/m3
-     * @var double 
+     * @var double
      */
     public $density = NULL;
-    
+
     /**
-     * IAPWS Steam Region
-     * @var double 
+     * IAPWS IF97 Steam Region
+     * @var double
      */
     public $region = NULL;
 
     /**
-     * Determines Full Steam Properties based on $properties
-     * 
-     * If $properties is NULL, creates structured blank Steam_Object 
-     * 
-     * $properties must include "pressure" and 1 of the following:
-     * temperature, quality, specificEnthalpy, or specificEntropy
-     * 
-     * $properties may also include "massFlow"
-     * 
-     * @param array() $properties 
+     * Returns Properties based on pressure and temperature
+     * @param $pressure
+     * @param $temperature
+     * @param $massFlow
+     * @return Properties
      */
-    public function __construct($properties = NULL) {
-        
-        //Set Massflow if provided
-        if (isset($properties['massFlow'])) $this->massFlow = $properties['massFlow'];
-       
-        //Determine Steam Properties
-        if (isset($properties['temperature'])) $pressureAnd='temperature';
-        if (isset($properties['quality'])) $pressureAnd='quality';
-        if (isset($properties['specificEnthalpy'])) $pressureAnd='specificEnthalpy';
-        if (isset($properties['specificEntropy'])) $pressureAnd='specificEntropy';
-        
-        if (isset($properties['pressure']) and isset($pressureAnd)) {
-            switch ($pressureAnd) {
-                case 'temperature':
-                    $properties = IF97::waterPropertiesPT($properties['pressure'],$properties['temperature']);
-                    break;
-                case 'quality':
-                    $properties = $this->propertyQuality($properties['pressure'], $properties['quality']);
-                    break;
-                case 'specificEnthalpy':
-                    $properties = $this->iapws->waterPropertiesPH($properties['pressure'], $properties['specificEnthalpy']);
-                    break;
-                case 'specificEntropy':
-                    $properties = $this->iapws->waterPropertiesPS($properties['pressure'], $properties['specificEntropy']);
-                    break;
-            }
-            $this->setProperties($properties);
-        }        
+    static function pressureTemperature($pressure, $temperature, $massFlow = null)
+    {
+        return self::setProperties(IF97::waterPropertiesPT($pressure, $temperature),$massFlow);
+    }
+
+    /**
+     * @param $pressure
+     * @param $quality
+     * @param $massFlow
+     * @return Properties
+     */
+    static function pressureQuality($pressure, $quality, $massFlow = null)
+    {
+        $properties = self::saturatedPressure($pressure);
+        $properties->setQuality($quality);
+        return self::setProperties($properties,$massFlow);
+    }
+    /**
+     * @param $pressure
+     * @param $specificEnthalpy
+     * @param $massFlow
+     * @return Properties
+     */
+    static function pressureSpecificEnthalpy($pressure, $specificEnthalpy, $massFlow = null)
+    {
+        return self::setProperties(IF97::waterPropertiesPH($pressure, $specificEnthalpy), $massFlow);
+    }
+
+    static function pressureSpecificEntropy($pressure, $specificEntropy, $massFlow = null)
+    {
+        return self::setProperties(IF97::waterPropertiesPH($pressure, $specificEntropy), $massFlow);
+    }
+
+    static function saturatedPressure($pressure)
+    {
+        $saturatedProperties = IF97::saturatedPropertiesByPressure($pressure);
+        $properties = new Properties();
+        $properties->saturatedGas = $saturatedProperties['gas'];
+        $properties->saturatedLiquid = $saturatedProperties['liquid'];
+        return $properties;
+    }
+
+    static function saturatedTemperature($temperature)
+    {
+        $saturatedProperties = IF97::saturatedPropertiesByTemperature($temperature);
+        $properties = new Properties();
+        $properties->saturatedGas = $saturatedProperties['gas'];
+        $properties->saturatedLiquid = $saturatedProperties['liquid'];
+        return $properties;
     }
 
     /**
      * Determine Steam Properties based on Pressure and Quality
      * @param double $quality (0-1)
-     * @return array() Steam Properties
+     * @return void
      */
-    public function propertyQuality($quality){
+    public function setQuality($quality)
+    {
         $this->quality = $quality;
         $this->temperature = $this->saturatedGas->temperature * 1;
         $this->pressure = $this->saturatedGas->pressure * 1;
-        $this->specificEnthalpy = $this->saturatedGas->specificEnthalpy * $quality + $this->saturatedLiquid->specificEnthalpy * (1-$quality);
-        $this->specificEntropy = $this->saturatedGas->specificEntropy * $quality + $this->saturatedLiquid->specificEntropy * (1-$quality);
-        $this->specificVolume = $this->saturatedGas->specificVolume * $quality + $this->saturatedLiquid->specificVolume * (1-$quality);
-        $this->density = 1/$this->specificVolume;
+        $this->specificEnthalpy = $this->saturatedGas->specificEnthalpy * $quality + $this->saturatedLiquid->specificEnthalpy * (1 - $quality);
+        $this->specificEntropy = $this->saturatedGas->specificEntropy * $quality + $this->saturatedLiquid->specificEntropy * (1 - $quality);
+        $this->specificVolume = $this->saturatedGas->specificVolume * $quality + $this->saturatedLiquid->specificVolume * (1 - $quality);
+        $this->density = 1 / $this->specificVolume;
         $this->quality = $quality;
+        $this->phase = 'Saturated';
         //$this->region = $tmp['region'];
     }
 
     /**
      * Sets the Mass Flow and Energy flow of the Steam
      * @param double $massFlow kg/hr
+     * @return void
      */
-    public function setMassFlow($massFlow){       
-        $this->massFlow = $massFlow*1;
-        $this->energyFlow = $this->specificEnthalpy * $this->massFlow / 1000;        
+    public function setMassFlow($massFlow)
+    {
+        $this->massFlow = $massFlow * 1;
+        $this->energyFlow = $this->specificEnthalpy * $this->massFlow / 1000;
         $this->volumeFlow = $this->specificVolume * $this->massFlow * 1000;
     }
 
     /**
-     * Set Steam Properties as Object Variables
-     * @param array() $properties  Steam Properties
+     * @param Properties $properties
+     * @param $massFlow
+     * @return Properties
      */
-    private function setProperties($properties) {
-        $this->temperature = $properties['temperature'];
-        $this->pressure = $properties['pressure'];
-        $this->specificEnthalpy = $properties['specificEnthalpy'];
-        $this->specificEntropy = $properties['specificEntropy'];
-        $this->specificVolume = $properties['specificVolume'];
-        $this->quality = $properties['quality'];
-        $this->density = null;
-        if ($properties['specificVolume']<>0) $this->density = 1/$properties['specificVolume'];
-        $this->region = 0;
-        if (isset($properties['region']) ) $this->region = $properties['region'];
-        $this->phase = 'Saturated';
-        if (is_null($this->quality)){
-            $this->phase = $properties['phase'];
-        }
-        $this->setMassFlow($this->massFlow);
-    }  
+    static function setProperties($properties, $massFlow)
+    {
+        if ($massFlow) $properties->setMassFlow($massFlow);
+        return $properties;
+    }
 }
